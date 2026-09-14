@@ -81,7 +81,31 @@
 	status = "okay";
 };
 
+/*
+ * Same class of mismatch as the USB HS PHY below: khaje's UFS QMP PHY is not
+ * bengal's, and inheriting sm6115.dtsi gets us the wrong register tables.
+ *
+ * Unlike the USB case this one binds silently -- "qcom,sm6115-qmp-ufs-phy" IS
+ * in U-Boot's match list, so the PHY programs without complaint and simply
+ * never links, and `scsi scan` reports no devices with no error at all.
+ *
+ * Linux is explicit that these are different parts. In
+ * phy-qcom-qmp-ufs.c, sm6125 aliases sm6115's config, but sm6225 gets its own:
+ *
+ *     sm6115: lanes 1, UFS_HS_G3, sm6115_ufsphy_* tables, v2 regs
+ *     sm6225: lanes 2, UFS_HS_G4, sm8150_ufsphy_* tables, v4 regs
+ *
+ * and Linux's sm6225_ufsphy_cfg is field-for-field identical to its
+ * sm8150_ufsphy_cfg -- a duplicated struct rather than a distinct PHY. U-Boot
+ * has no "qcom,sm6225-qmp-ufs-phy", but it does carry sm8150_ufsphy_cfg with
+ * the same 2 lanes, the same serdes/tx/rx/pcs tables and the same G4 overlay.
+ *
+ * So point at sm8150 and khaje gets exactly the tables Linux drives it with.
+ * If a real qcom,sm6225-qmp-ufs-phy is ever added upstream, switch to it and
+ * drop this override.
+ */
 &ufs_mem_phy {
+	compatible = "qcom,sm8150-qmp-ufs-phy";
 	vdda-phy-supply = <&vreg_ufs_bringup>;
 	vdda-pll-supply = <&vreg_ufs_bringup>;
 	status = "okay";
