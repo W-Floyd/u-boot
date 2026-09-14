@@ -23,6 +23,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/linux-event-codes.h>
 #include "sm6115.dtsi"
+#include "pm6125.dtsi"
 
 / {
 	model = "Motorola Moto G Play (2024)";
@@ -60,16 +61,29 @@
 	};
 
 	/*
-	 * Volume-up is the only key on TLMM (gpio 5); power and volume-down
-	 * hang off the PMIC. One key is enough for U-Boot's "press any key".
+	 * All three side keys are on the PM6125, none on TLMM. Power and
+	 * volume-down come from the PON block (enabled at the end of this
+	 * file); volume-up is PMIC GPIO 5.
+	 *
+	 * This node previously said <&tlmm 5>, which is the natural wrong
+	 * guess and the one our Linux sm6225-motorola-fogona.dtsi explicitly
+	 * warns about: the schematic routes KYPD_VOLP_N to PM6225 GPIO_05
+	 * (pad 21), and the stock dtbo's vol_up node reads
+	 * `gpios = <0xffffffff 0x05 0x01>` with a fixups block resolving that
+	 * dangling phandle to pm6125_gpios. Read without applying the fixups
+	 * it looks like a bare "gpio 5", and TLMM is the obvious misreading.
+	 *
+	 * Symptom of getting it wrong: volume-down works and volume-up does
+	 * not, because down comes from PON and up reads a floating TLMM line.
 	 */
 	gpio-keys {
 		compatible = "gpio-keys";
 
 		key-volume-up {
 			label = "Volume Up";
-			gpios = <&tlmm 5 GPIO_ACTIVE_LOW>;
+			gpios = <&pm6125_gpios 5 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_VOLUMEUP>;
+			debounce-interval = <15>;
 		};
 	};
 };
@@ -182,4 +196,25 @@
  */
 &tlmm {
 	gpio-reserved-ranges = <14 4>;
+};
+
+/*
+ * Volume-down and power live on the PM6125's PON block, not on TLMM -- the
+ * only TLMM key is volume-up (gpio 5). Without these, U-Boot prints
+ * "No button labelled 'Volume Down'" and qcom-phone.env's bootmenu, which
+ * binds volume-down to `run menucmd`, is unreachable.
+ *
+ * No driver work is needed: button-qcom-pmic.c already matches
+ * qcom,pm8998-pon (the compatible pm6125.dtsi uses) and both child
+ * compatibles, and CONFIG_BUTTON_QCOM_PMIC is enabled. Same wiring as
+ * qrb4210-rb2.dts, which is also pm6125 on sm6115, and as our own Linux
+ * sm6225-motorola-fogona.dtsi.
+ */
+&pon_pwrkey {
+	status = "okay";
+};
+
+&pon_resin {
+	linux,code = <KEY_VOLUMEDOWN>;
+	status = "okay";
 };
