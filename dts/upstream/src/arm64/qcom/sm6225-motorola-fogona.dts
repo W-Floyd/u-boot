@@ -109,7 +109,34 @@
 	dr_mode = "peripheral";
 };
 
+/*
+ * khaje's USB HS PHY is a Synopsys femto v2, NOT the QUSB2 that U-Boot's
+ * sm6115.dtsi describes at this address.
+ *
+ * Including sm6115.dtsi is deliberate -- U-Boot has clock-sm6115.c and
+ * pinctrl-sm6115.c and no sm6225 equivalents. That bet holds for clocks and
+ * pinctrl. It does NOT hold for the USB PHY: bengal has a QUSB2 at 0x1613000,
+ * khaje has a femto. Same address, same 0x180 window, different block.
+ *
+ * Inheriting "qcom,sm6115-qusb2-phy" binds phy-qcom-qusb2.c, which pokes
+ * QUSB2 PLL registers that do not exist in this layout and fails with:
+ *
+ *     QUSSB2PHY pll lock failed; status reg = 0
+ *     qcom-qusb2-phy phy@1613000: PHY: Failed to power on ...: -16
+ *
+ * Linux's own sm6225.dtsi and SCOS100's U-Boot sm6225.dtsi both declare
+ * "qcom,sm6375-usb-hs-phy", "qcom,usb-snps-hs-7nm-phy" here, arrived at
+ * independently. Override to the generic fallback, which
+ * phy-qcom-snps-femto-v2.c matches and CONFIG_PHY_QCOM_USB_SNPS_FEMTO_V2
+ * already builds.
+ *
+ * That driver takes only reg + reset -- no clocks, no supplies -- so this
+ * also sidesteps both U-Boot gaps on khaje: no SMD/RPM regulator driver, and
+ * rpmcc served by clk-stub. The supplies below are now vestigial; nothing
+ * reads them. They are kept as documentation of the rails.
+ */
 &usb_hsphy {
+	compatible = "qcom,usb-snps-hs-7nm-phy";
 	vdd-supply = <&vreg_ufs_bringup>;
 	vdda-pll-supply = <&vreg_ufs_bringup>;
 	vdda-phy-dpdm-supply = <&vreg_ufs_bringup>;
