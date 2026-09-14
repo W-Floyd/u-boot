@@ -165,6 +165,7 @@ static const struct qcom_reset_map sm6115_gcc_resets[] = {
 };
 
 static const struct qcom_power_map sm6115_gdscs[] = {
+	[GCC_UFS_PHY_GDSC] = { 0x45004 },
 	[GCC_USB30_PRIM_GDSC] = { 0x1a004 },
 };
 
