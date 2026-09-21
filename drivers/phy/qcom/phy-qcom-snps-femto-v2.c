@@ -6,6 +6,7 @@
  * Based on Linux driver
  */
 
+#include <clk.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
@@ -59,6 +60,7 @@
 
 struct qcom_snps_hsphy {
 	void __iomem *base;
+	struct clk_bulk clks;
 	struct reset_ctl_bulk resets;
 };
 
@@ -139,6 +141,18 @@ static int qcom_snps_hsphy_power_on(struct phy *phy)
 	struct qcom_snps_hsphy *priv = dev_get_priv(phy->dev);
 	int ret;
 
+	/*
+	 * The PHY's register block sits behind the USB AHB2PHY bridge, whose
+	 * clock ("cfg_ahb") is one of the clocks in this node. Until it runs,
+	 * the writes in qcom_snps_hsphy_usb_init() below are simply dropped:
+	 * the PHY stays in SIDDQ with POR asserted, never supplies a UTMI
+	 * clock, and the controller's first endpoint command times out. So
+	 * the clocks must come up before any register access, not after.
+	 */
+	ret = clk_enable_bulk(&priv->clks);
+	if (ret)
+		return ret;
+
 	ret = reset_deassert_bulk(&priv->resets);
 	if (ret)
 		return ret;
@@ -155,6 +169,7 @@ static int qcom_snps_hsphy_power_off(struct phy *phy)
 	struct qcom_snps_hsphy *priv = dev_get_priv(phy->dev);
 
 	reset_assert_bulk(&priv->resets);
+	clk_disable_bulk(&priv->clks);
 
 	return 0;
 }
@@ -167,6 +182,18 @@ static int qcom_snps_hsphy_phy_probe(struct udevice *dev)
 	priv->base = dev_read_addr_ptr(dev);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
+
+	/*
+	 * Optional: boards whose node carries no "clocks" get -ENOENT here and
+	 * keep the previous behaviour of relying on whatever the prior stage
+	 * left enabled. clk_enable_bulk() tolerates a provider without an
+	 * .enable op, so a stubbed clock (rpmcc, for the "ref" input) is fine.
+	 */
+	ret = clk_get_bulk(dev, &priv->clks);
+	if (ret < 0 && ret != -ENOENT) {
+		printf("failed to get clocks, ret = %d\n", ret);
+		return ret;
+	}
 
 	ret = reset_get_bulk(dev, &priv->resets);
 	if (ret < 0) {
