@@ -75,9 +75,19 @@
 	 *
 	 * Symptom of getting it wrong: volume-down works and volume-up does
 	 * not, because down comes from PON and up reads a floating TLMM line.
+	 *
+	 * The pad also needs its pull-up: KYPD_VOLP_N is a switch to ground
+	 * with no external pull, and the bootloader leaves the pad with the
+	 * bias off, so the line floats while the key is up. Same state as
+	 * the Linux dtsi, the stock dtbo (key_vol_up_default) and
+	 * qrb4210-rb2.dts; the PMIC GPIO driver applies bias-pull-up and
+	 * leaves it alone when the button driver later claims the line.
 	 */
 	gpio-keys {
 		compatible = "gpio-keys";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&kypd_vol_up_n>;
 
 		key-volume-up {
 			label = "Volume Up";
@@ -85,6 +95,16 @@
 			linux,code = <KEY_VOLUMEUP>;
 			debounce-interval = <15>;
 		};
+	};
+};
+
+&pm6125_gpios {
+	kypd_vol_up_n: kypd-vol-up-n-state {
+		pins = "gpio5";
+		function = "normal";
+		power-source = <0>;
+		bias-pull-up;
+		input-enable;
 	};
 };
 
