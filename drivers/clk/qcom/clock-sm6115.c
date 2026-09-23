@@ -19,6 +19,8 @@
 #define QUPV3_WRAP0_S4_CMD_RCGR 0x1f608
 #define SDCC1_APPS_CLK_CMD_RCGR 0x38028
 #define SDCC2_APPS_CLK_CMD_RCGR 0x1e00c
+#define USB30_PRIM_MASTER_CLK_CMD_RCGR 0x1a01c
+#define USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR 0x1a034
 
 static const struct freq_tbl ftbl_gcc_qupv3_wrap0_s0_clk_src[] = {
 	F(7372800, CFG_CLK_SRC_GPLL0_AUX2, 1, 384, 15625),
@@ -141,6 +143,22 @@ static int sm6115_enable(struct clk *clk)
 
 	switch (clk->id) {
 	case GCC_USB30_PRIM_MASTER_CLK:
+		/*
+		 * Nothing before U-Boot programs these RCGs unless the
+		 * bootloader ran its own fastboot session. On a cold boot
+		 * the master and UTMI sources are left unconfigured, the
+		 * gated branches below then feed dwc3 nothing, and every
+		 * endpoint command times out ("failed to enable ep0out").
+		 * Rates and dividers are the ones Linux's gcc-sm6115.c and
+		 * sm6115.dtsi use: 66.67 MHz from GPLL0_AUX2 (300 MHz / 4.5)
+		 * and the 19.2 MHz XO for UTMI. A HID divider is encoded as
+		 * 2 * div - 1.
+		 */
+		clk_enable_gpll0(priv->base, &gpll0_clk);
+		clk_rcg_set_rate_mnd(priv->base, USB30_PRIM_MASTER_CLK_CMD_RCGR,
+				     (4.5 * 2) - 1, 0, 0, CFG_CLK_SRC_GPLL0_AUX2, 8);
+		clk_rcg_set_rate_mnd(priv->base, USB30_PRIM_MOCK_UTMI_CLK_CMD_RCGR,
+				     1, 0, 0, CFG_CLK_SRC_CXO, 8);
 		qcom_gate_clk_en(priv, GCC_USB3_PRIM_PHY_COM_AUX_CLK);
 		qcom_gate_clk_en(priv, GCC_USB3_PRIM_CLKREF_CLK);
 		break;
