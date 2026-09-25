@@ -146,6 +146,25 @@
 };
 
 /*
+ * The microSD slot, which is where pmOS lives when the handset dual-boots
+ * stock from UFS (the boot environment looks for /boot on SD first). As in
+ * Linux's fogona dtsi: card detect on TLMM 88, 4-bit, SD only.
+ *
+ * No vmmc/vqmmc supplies. The real ones are pm6125 L22 and L5 behind
+ * RPM/SMD, which U-Boot has no driver for, and U-Boot's mmc core treats a
+ * missing supply as "nothing to switch" -- so the card is readable here only
+ * if ABL has left those rails on.
+ */
+&sdhc_2 {
+	cd-gpios = <&tlmm 88 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&sdc2_state_on>;
+	pinctrl-names = "default";
+	no-sdio;
+	no-mmc;
+	status = "okay";
+};
+
+/*
  * USB. fogona is USB 2.0 only -- Motorola's schematics break out USB0_CC1/CC2
  * to testpoints but carry no SBU, and USB0_SS_* / USB0_DP_AUX_* have no
  * cross-sheet routing at all. So enable the HS phy and pin dwc3 to
